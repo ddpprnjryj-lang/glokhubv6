@@ -1,28 +1,30 @@
-repeat task.wait() until game:IsLoaded()
 
-if _G.GlokHubLoaded then return end
-_G.GlokHubLoaded = true
+-- Glok Hub V6 (Delta Mobile) Full Core Script
+
+repeat task.wait() until game:IsLoaded()
 
 local Players = game:GetService("Players")
 local StarterGui = game:GetService("StarterGui")
-local TeleportService = game:GetService("TeleportService")
-local HttpService = game:GetService("HttpService")
+local RunService = game:GetService("RunService")
 
 local player = Players.LocalPlayer
-local PlaceId = game.PlaceId
 
-_G.autoStartFinder = false
-_G.finderRunning = false
+-- SETTINGS
+_G.finderMenu = false
+_G.espPlayers = false
+_G.espBrainrot = false
+_G.xray = false
+_G.autoExecute = true
 
 local basePosition = nil
 
--- GET HRP
+-- ALWAYS GET UPDATED CHARACTER
 local function getHRP()
     local char = player.Character or player.CharacterAdded:Wait()
     return char:WaitForChild("HumanoidRootPart")
 end
 
--- NOTIFY
+-- NOTIFY + BELL
 local function notify(msg)
     pcall(function()
         StarterGui:SetCore("SendNotification", {
@@ -31,10 +33,7 @@ local function notify(msg)
             Duration = 5
         })
     end)
-end
 
--- BELL
-local function playBell()
     local sound = Instance.new("Sound")
     sound.SoundId = "rbxassetid://9118823104"
     sound.Volume = 5
@@ -43,33 +42,19 @@ local function playBell()
     game.Debris:AddItem(sound, 3)
 end
 
--- SAFE STEP TELEPORT
+-- STEP TELEPORT (ANTI SNAP)
 local function stepTeleport(destination)
     local hrp = getHRP()
-
     local distance = (hrp.Position - destination).Magnitude
-    local steps = math.clamp(math.floor(distance / 10), 8, 60)
+    local steps = math.clamp(math.floor(distance / 6), 5, 100)
 
     for i = 1, steps do
-        hrp = getHRP()
         local newPos = hrp.Position:Lerp(destination, i / steps)
-        hrp.CFrame = CFrame.new(newPos + Vector3.new(0,4,0))
-        task.wait(0.06)
+        hrp.CFrame = CFrame.new(newPos + Vector3.new(0,3,0))
+        task.wait(0.03)
     end
 
-    hrp = getHRP()
-    hrp.CFrame = CFrame.new(destination + Vector3.new(0,4,0))
-end
-
--- SAFE LOCK POSITION
-local function lockPosition(pos, duration)
-    local start = tick()
-
-    while tick() - start < duration do
-        local hrp = getHRP()
-        hrp.CFrame = CFrame.new(pos + Vector3.new(0,4,0))
-        task.wait(0.1)
-    end
+    hrp.CFrame = CFrame.new(destination + Vector3.new(0,3,0))
 end
 
 -- SET BASE
@@ -79,17 +64,7 @@ function setBase()
     notify("Base Saved")
 end
 
--- TP TO BASE
-function tpToBase()
-    if basePosition then
-        stepTeleport(basePosition)
-        lockPosition(basePosition, 0.5)
-    else
-        notify("Set Base First")
-    end
-end
-
--- MONEY PARSER
+-- PARSE MONEY
 local function parseMoney(str)
     if not str then return 0 end
     str = string.lower(str)
@@ -101,102 +76,49 @@ local function parseMoney(str)
     return tonumber(str) or 0
 end
 
--- GRAB BRAINROT
+-- AUTO GRAB
 local function grabBrainrot(model)
     if not basePosition then
         notify("Set Base First!")
         return
     end
 
-    local targetPart = model:FindFirstChild("HumanoidRootPart") 
-        or model:FindFirstChild("Head") 
-        or model:FindFirstChildWhichIsA("BasePart")
+    local target = model:FindFirstChild("HumanoidRootPart")
+    if target then
+        -- Go to brainrot
+        stepTeleport(target.Position)
+        task.wait(0.4)
 
-    if targetPart then
-        stepTeleport(targetPart.Position)
-        task.wait(0.5)
-
+        -- Activate proximity prompts
         for _, v in pairs(model:GetDescendants()) do
             if v:IsA("ProximityPrompt") then
                 fireproximityprompt(v)
             end
         end
 
-        task.wait(0.5)
+        task.wait(0.4)
+
+        -- TELEPORT BACK TO BASE (anti snap-back)
         stepTeleport(basePosition)
-        lockPosition(basePosition, 0.5)
-    end
-end
-
--- CHECK SERVER FOR 100M
-local function serverHas100M()
-    for _, v in pairs(workspace:GetDescendants()) do
-        if v:IsA("TextLabel") and v.Text and v.Text:find("/sec") then
-            local money = parseMoney(v.Text)
-            if money >= 100000000 then
-                return true, v.Text, v:FindFirstAncestorOfClass("Model")
-            end
+        local hrp = getHRP()
+        for i = 1, 20 do
+            hrp.CFrame = CFrame.new(basePosition + Vector3.new(0,4,0))
+            task.wait(0.05)
         end
     end
-    return false
 end
 
--- FINDER
-function startFinder(statusLabel)
-    if _G.finderRunning then return end
-    _G.finderRunning = true
-
-    notify("Finder Started")
-
-    while _G.finderRunning do
-        statusLabel.Text = "Status: Checking Server..."
-
-        local found, text, model = serverHas100M()
-
-        if found then
-            statusLabel.Text = "Status: FOUND "..text
-            notify("FOUND: "..text)
-            playBell()
-
-            if model then
-                grabBrainrot(model)
-            end
-
-            _G.finderRunning = false
-            return
-        end
-
-        statusLabel.Text = "Status: Server Hop..."
-
-        local url = "https://games.roblox.com/v1/games/"..PlaceId.."/servers/Public?sortOrder=Asc&limit=100"
-        local data = HttpService:JSONDecode(game:HttpGet(url))
-
-        for _, server in pairs(data.data) do
-            if server.playing < server.maxPlayers then
-                TeleportService:TeleportToPlaceInstance(PlaceId, server.id, player)
-                task.wait(5)
-            end
-        end
-
-        task.wait(2)
-    end
-end
-
-function stopFinder()
-    _G.finderRunning = false
-    notify("Finder Stopped")
-end
-
--- GUI
+-- CLEAN OLD GUI
 pcall(function()
     game.CoreGui:FindFirstChild("GlokHubUI"):Destroy()
 end)
 
+-- GUI
 local gui = Instance.new("ScreenGui", game.CoreGui)
 gui.Name = "GlokHubUI"
 
 local frame = Instance.new("Frame", gui)
-frame.Size = UDim2.new(0,230,0,320)
+frame.Size = UDim2.new(0,220,0,300)
 frame.Position = UDim2.new(0,50,0,100)
 frame.BackgroundColor3 = Color3.fromRGB(0,0,0)
 frame.Active = true
@@ -208,32 +130,57 @@ title.Text = "GLOK HUB V6"
 title.TextColor3 = Color3.new(1,1,1)
 title.BackgroundColor3 = Color3.fromRGB(20,20,20)
 
-local status = Instance.new("TextLabel", frame)
-status.Size = UDim2.new(1,0,0,30)
-status.Position = UDim2.new(0,0,0,30)
-status.Text = "Status: Idle"
-status.TextColor3 = Color3.new(1,1,1)
-status.BackgroundColor3 = Color3.fromRGB(30,30,30)
+-- BUTTON MAKER
+local function createButton(text, yPos, callback)
+    local button = Instance.new("TextButton", frame)
+    button.Size = UDim2.new(1,-20,0,30)
+    button.Position = UDim2.new(0,10,0,yPos)
+    button.Text = text.." : OFF"
+    button.TextColor3 = Color3.new(1,1,1)
+    button.BackgroundColor3 = Color3.fromRGB(30,30,30)
 
-local function button(name, y, callback)
-    local b = Instance.new("TextButton", frame)
-    b.Size = UDim2.new(1,-20,0,30)
-    b.Position = UDim2.new(0,10,0,y)
-    b.Text = name
-    b.BackgroundColor3 = Color3.fromRGB(40,40,40)
-    b.TextColor3 = Color3.new(1,1,1)
-    b.MouseButton1Click:Connect(callback)
+    local state = false
+
+    button.MouseButton1Click:Connect(function()
+        state = not state
+        if state then
+            button.Text = text.." : ON"
+            button.BackgroundColor3 = Color3.fromRGB(0,170,0)
+        else
+            button.Text = text.." : OFF"
+            button.BackgroundColor3 = Color3.fromRGB(30,30,30)
+        end
+        callback(state)
+    end)
 end
 
-button("Set Base", 70, setBase)
-button("TP To Base", 110, tpToBase)
-button("Start Finder", 150, function() startFinder(status) end)
-button("Stop Finder", 190, stopFinder)
+-- BUTTONS
+createButton("Set Base", 40, function() setBase() end)
+createButton("Brainrot Finder", 80, function(v)
+    _G.finderMenu = v
+    notify("Finder Menu enabled ($100M+/sec)")
+end)
+createButton("ESP Players", 120, function(v) _G.espPlayers = v end)
+createButton("ESP Brainrot", 160, function(v) _G.espBrainrot = v end)
+createButton("X-Ray", 200, function(v) _G.xray = v end)
 
--- AUTO START AFTER TELEPORT
+-- FINDER LOOP (Brainrots $100M+/sec)
 task.spawn(function()
-    task.wait(8)
-    if _G.autoStartFinder then
-        startFinder(status)
+    while task.wait(3) do
+        if _G.finderMenu then
+            for _, v in pairs(workspace:GetDescendants()) do
+                if v:IsA("TextLabel") and v.Text and v.Text:find("/sec") then
+                    local money = parseMoney(v.Text)
+                    if money >= 1e8 then
+                        local model = v:FindFirstAncestorOfClass("Model")
+                        if model then
+                            notify("Brainrot Found: "..v.Text)
+                            grabBrainrot(model)
+                            task.wait(2)
+                        end
+                    end
+                end
+            end
+        end
     end
 end)
