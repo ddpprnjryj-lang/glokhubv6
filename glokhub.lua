@@ -16,7 +16,7 @@ _G.finderRunning = false
 
 local basePosition = nil
 
--- ALWAYS GET HRP
+-- GET HRP
 local function getHRP()
     local char = player.Character or player.CharacterAdded:Wait()
     return char:WaitForChild("HumanoidRootPart")
@@ -43,30 +43,32 @@ local function playBell()
     game.Debris:AddItem(sound, 3)
 end
 
--- STEP TELEPORT
+-- SAFE STEP TELEPORT
 local function stepTeleport(destination)
     local hrp = getHRP()
+
     local distance = (hrp.Position - destination).Magnitude
-    local steps = math.clamp(math.floor(distance / 8), 6, 120)
+    local steps = math.clamp(math.floor(distance / 10), 8, 60)
 
     for i = 1, steps do
         hrp = getHRP()
         local newPos = hrp.Position:Lerp(destination, i / steps)
-        hrp.CFrame = CFrame.new(newPos + Vector3.new(0,3,0))
-        task.wait(0.03)
+        hrp.CFrame = CFrame.new(newPos + Vector3.new(0,4,0))
+        task.wait(0.06)
     end
 
     hrp = getHRP()
-    hrp.CFrame = CFrame.new(destination + Vector3.new(0,3,0))
+    hrp.CFrame = CFrame.new(destination + Vector3.new(0,4,0))
 end
 
--- LOCK POSITION
+-- SAFE LOCK POSITION
 local function lockPosition(pos, duration)
     local start = tick()
+
     while tick() - start < duration do
         local hrp = getHRP()
-        hrp.CFrame = CFrame.new(pos + Vector3.new(0,3,0))
-        task.wait()
+        hrp.CFrame = CFrame.new(pos + Vector3.new(0,4,0))
+        task.wait(0.1)
     end
 end
 
@@ -77,11 +79,11 @@ function setBase()
     notify("Base Saved")
 end
 
--- TP TO BASE BUTTON
+-- TP TO BASE
 function tpToBase()
     if basePosition then
         stepTeleport(basePosition)
-        lockPosition(basePosition, 2)
+        lockPosition(basePosition, 0.5)
     else
         notify("Set Base First")
     end
@@ -122,7 +124,7 @@ local function grabBrainrot(model)
 
         task.wait(0.5)
         stepTeleport(basePosition)
-        lockPosition(basePosition, 2)
+        lockPosition(basePosition, 0.5)
     end
 end
 
@@ -202,7 +204,7 @@ frame.Draggable = true
 
 local title = Instance.new("TextLabel", frame)
 title.Size = UDim2.new(1,0,0,30)
-title.Text = "GLOK HUB V5"
+title.Text = "GLOK HUB V6"
 title.TextColor3 = Color3.new(1,1,1)
 title.BackgroundColor3 = Color3.fromRGB(20,20,20)
 
